@@ -4,7 +4,7 @@
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -162,7 +162,7 @@ void DMA1_Channel4_5_IRQHandler(void)
 void ADC1_COMP_IRQHandler(void)
 {
   /* USER CODE BEGIN ADC1_COMP_IRQn 0 */
-
+//	HAL_COMP_IRQHandler(&hcomp1);
   /* USER CODE END ADC1_COMP_IRQn 0 */
   HAL_ADC_IRQHandler(&hadc);
   HAL_COMP_IRQHandler(&hcomp1);
