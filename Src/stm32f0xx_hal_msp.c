@@ -10,7 +10,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -110,7 +110,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     __HAL_LINKDMA(hadc,DMA_Handle,hdma_adc);
 
     /* ADC1 interrupt Init */
-    HAL_NVIC_SetPriority(ADC1_COMP_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(ADC1_COMP_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(ADC1_COMP_IRQn);
   /* USER CODE BEGIN ADC1_MspInit 1 */
 
@@ -175,7 +175,7 @@ void HAL_COMP_MspInit(COMP_HandleTypeDef* hcomp)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* COMP1 interrupt Init */
-    HAL_NVIC_SetPriority(ADC1_COMP_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(ADC1_COMP_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(ADC1_COMP_IRQn);
   /* USER CODE BEGIN COMP1_MspInit 1 */
 
@@ -226,9 +226,6 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM1_MspInit 0 */
     /* Peripheral clock enable */
     __HAL_RCC_TIM1_CLK_ENABLE();
-    /* TIM1 interrupt Init */
-    HAL_NVIC_SetPriority(TIM1_CC_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
   /* USER CODE BEGIN TIM1_MspInit 1 */
 
   /* USER CODE END TIM1_MspInit 1 */
@@ -240,9 +237,6 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM2_MspInit 0 */
     /* Peripheral clock enable */
     __HAL_RCC_TIM2_CLK_ENABLE();
-    /* TIM2 interrupt Init */
-    HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TIM2_IRQn);
   /* USER CODE BEGIN TIM2_MspInit 1 */
 
   /* USER CODE END TIM2_MspInit 1 */
@@ -285,7 +279,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
     hdma_tim15_ch1_up_trig_com.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
     hdma_tim15_ch1_up_trig_com.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_tim15_ch1_up_trig_com.Init.Mode = DMA_NORMAL;
-    hdma_tim15_ch1_up_trig_com.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_tim15_ch1_up_trig_com.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_tim15_ch1_up_trig_com) != HAL_OK)
     {
       _Error_Handler(__FILE__, __LINE__);
@@ -356,9 +350,6 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM1_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM1_CLK_DISABLE();
-
-    /* TIM1 interrupt DeInit */
-    HAL_NVIC_DisableIRQ(TIM1_CC_IRQn);
   /* USER CODE BEGIN TIM1_MspDeInit 1 */
 
   /* USER CODE END TIM1_MspDeInit 1 */
@@ -370,9 +361,6 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM2_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM2_CLK_DISABLE();
-
-    /* TIM2 interrupt DeInit */
-    HAL_NVIC_DisableIRQ(TIM2_IRQn);
   /* USER CODE BEGIN TIM2_MspDeInit 1 */
 
   /* USER CODE END TIM2_MspDeInit 1 */

@@ -4,7 +4,7 @@
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -44,8 +44,6 @@ extern DMA_HandleTypeDef hdma_adc;
 extern ADC_HandleTypeDef hadc;
 extern COMP_HandleTypeDef hcomp1;
 extern DMA_HandleTypeDef hdma_tim15_ch1_up_trig_com;
-extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim2;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -162,41 +160,13 @@ void DMA1_Channel4_5_IRQHandler(void)
 void ADC1_COMP_IRQHandler(void)
 {
   /* USER CODE BEGIN ADC1_COMP_IRQn 0 */
-
+//	HAL_COMP_IRQHandler(&hcomp1);
   /* USER CODE END ADC1_COMP_IRQn 0 */
   HAL_ADC_IRQHandler(&hadc);
   HAL_COMP_IRQHandler(&hcomp1);
   /* USER CODE BEGIN ADC1_COMP_IRQn 1 */
 
   /* USER CODE END ADC1_COMP_IRQn 1 */
-}
-
-/**
-* @brief This function handles TIM1 capture compare interrupt.
-*/
-void TIM1_CC_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_CC_IRQn 0 */
-
-  /* USER CODE END TIM1_CC_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim1);
-  /* USER CODE BEGIN TIM1_CC_IRQn 1 */
-
-  /* USER CODE END TIM1_CC_IRQn 1 */
-}
-
-/**
-* @brief This function handles TIM2 global interrupt.
-*/
-void TIM2_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM2_IRQn 0 */
-
-  /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
-  /* USER CODE BEGIN TIM2_IRQn 1 */
-
-  /* USER CODE END TIM2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

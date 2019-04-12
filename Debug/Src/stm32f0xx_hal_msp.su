@@ -4,5 +4,5 @@ stm32f0xx_hal_msp.c:122:6:HAL_ADC_MspDeInit	8	static
 stm32f0xx_hal_msp.c:158:6:HAL_COMP_MspInit	32	static
 stm32f0xx_hal_msp.c:187:6:HAL_COMP_MspDeInit	8	static
 stm32f0xx_hal_msp.c:218:6:HAL_TIM_Base_MspInit	48	static
-stm32f0xx_hal_msp.c:308:6:HAL_TIM_MspPostInit	40	static
-stm32f0xx_hal_msp.c:349:6:HAL_TIM_Base_MspDeInit	8	static
+stm32f0xx_hal_msp.c:302:6:HAL_TIM_MspPostInit	40	static
+stm32f0xx_hal_msp.c:343:6:HAL_TIM_Base_MspDeInit	8	static
