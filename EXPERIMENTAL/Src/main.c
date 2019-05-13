@@ -79,11 +79,12 @@ enum userVars{
 	EEbidirection = 2,
 //	EEbrake_on_stop = 3
 };
-char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
+char vehicle_mode = 1;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
 int dead_time = 60;           // change to 60 for qfn
 
 int dir_reversed = 0;   // global direction reversed set in eeprom
 int step = 1;
+int startcount = 0;
 
 int forcedcomcount = 0;
 int commandcount = 0;
@@ -526,6 +527,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void startMotor() {
 
+ startcount++;
+
     char decaystate = slow_decay;
     sensorless = 0;
 	if (running == 0){
@@ -568,7 +571,7 @@ void forcedCommutation(){
 
 void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 	/* Turn On LED3 */
-	if( bemf_counts > 100 && commutation_interval < 300){
+	if( bemf_counts > 100 && commutation_interval < 400){
 		thiszctime = TIM3->CNT;
 //		GPIOA->BSRR = GPIO_PIN_15;
 		while (TIM3->CNT - thiszctime < filter_delay){
@@ -597,6 +600,12 @@ void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 								commutate();
 								while (TIM3->CNT  < waitTime + blanktime){
 								}
+								if (HAL_COMP_Start_IT(&hcomp1) != HAL_OK) {
+									/* Initialization Error */
+									Error_Handler();
+								}
+
+								return;
 
 	}else{
 
@@ -803,7 +812,7 @@ void computeProshotDMA(){
 
  int total = dma_buffer[1]+ dma_buffer[2] + dma_buffer[3] + dma_buffer[4]+ dma_buffer[5] + dma_buffer[6] + dma_buffer[7];
 
-   if ( total < 800 && total > 600){
+   if (( total < 800 && total > 600)&& (dma_buffer[0]> 1000)){
    for (int i = 1; i < 8; i +=2){
     propulse[(i-1) / 2] = (dma_buffer[i] - 45) /6;
 					}
@@ -825,8 +834,11 @@ void computeProshotDMA(){
  //   	error++;
     }
     if (tocheck > 47 && tocheck < 2048){
-    				newinput = tocheck;
+    	newinput = tocheck ;
     				commandcount = 0;
+
+
+
     			}else if (tocheck > 1 && tocheck < 48 && input == 0){
 
     					dshotcommand = tocheck ;
@@ -837,6 +849,7 @@ void computeProshotDMA(){
     			    commandcount = 0;
     			}
     			}
+
 }
 
 void computeDshotDMA(){
@@ -881,68 +894,9 @@ void computeDshotDMA(){
 			    commandcount = 0;
 			}
 			}
+
 }
 
-
-
-//void computeProshotDMA(){
-//	int lastnumber = dma_buffer[0];
-//	for ( int j = 1 ; j < 9; j++){
-//
-//		if(((dma_buffer[j] - lastnumber) > 1500) && ((dma_buffer[j] - lastnumber) < 50000)){ // blank space
-//			if ((dma_buffer[j+7] - dma_buffer[j])<10000){
-//
-//				for (int i = 0; i < 4; i++){
-//
-//					propulse[i] = (((dma_buffer[j + i*2 +1] - dma_buffer[j + i*2])) - 23)/3;
-//
-//
-//				}
-//
-//				calcCRC = ((propulse[0]^propulse[1]^propulse[2])<<3
-//						|(propulse[0]^propulse[1]^propulse[2])<<2
-//						|(propulse[0]^propulse[1]^propulse[2])<<1
-//						|(propulse[0]^propulse[1]^propulse[2]));
-//				checkCRC = (propulse[3]<<3 | propulse[3]<<2 | propulse[3]<<1 | propulse[3]);
-//			}
-//
-//
-//
-//			int tocheck = ((propulse[0]<<7 | propulse[1]<<3 | propulse[2]>>1));
-//			if (tocheck > 2047 || tocheck < 0){
-//				break;
-//			}else{
-//				if(calcCRC == checkCRC){
-//
-//				if (tocheck > 47 && tocheck <= 2047){
-//				newinput = tocheck;
-//				  dshotcommand = 0;
-//		          commandcount = 0;
-//				}
-//
-//			if ((tocheck <= 47)&& (tocheck > 0)){
-//				commandcount++;
-//				if (commandcount > 1){
-//				newinput = 0;
-//				dshotcommand = tocheck;    //  todo
-//				commandcount = 0;
-//				}
-//				}
-//			if (tocheck == 0){
-//	           commandcount++;
-//			if (commandcount > 1){
-//				newinput = 0;
-//				dshotcommand = 0;
-//				commandcount = 0;
-//					}
-//			}
-//			}
-//            }
-//			break;
-//		}
-//		lastnumber = dma_buffer[j];
-//	}
-//}
 
 void computeMSInput(){
 
@@ -990,27 +944,6 @@ void computeOS42Input(){
 
 
 void computeServoInput(){
-
-//	if ((dma_buffer[1] > 2500 && dma_buffer[3] > 2500) || (dma_buffer[1] < 1000 && dma_buffer[3] < 1000 )){
-//		if ((dma_buffer[2] < 2000 && dma_buffer[4] < 2000) &&
-//				(dma_buffer[2] > 1000 && dma_buffer[4] > 1000) &&
-//				(getAbsDif (dma_buffer[2], dma_buffer[4]) < 500)) {
-//
-//
-//		//	servorawinput = (dma_buffer[2] + dma_buffer[4]) / 2;
-//			servorawinput = map((dma_buffer[2] + dma_buffer[4]) / 2 , 1100, 2000, 0, 2000);
-//
-//		}
-//	}else if((dma_buffer[2] > 2500 && dma_buffer[4] > 2500)||(dma_buffer[2] < 1000 && dma_buffer[4] < 1000)){
-//		if ((dma_buffer[1] < 2000 && dma_buffer[3] < 2000) &&
-//				(dma_buffer[1] > 1000 && dma_buffer[3] > 1000) &&
-//				(getAbsDif (dma_buffer[1], dma_buffer[3]) < 500)){
-//		//	servorawinput = (dma_buffer[1] + dma_buffer[3]) / 2;
-//			servorawinput = map((dma_buffer[1] + dma_buffer[3]) / 2 , 1100, 2000, 0, 2000);
-//	}
-//	}else{
-//
-//	}
 
 	if ( dma_buffer[1] < 2000 && dma_buffer[1] > 1000){
 		if(dma_buffer[2]< 1000 || dma_buffer[2] > 2500){
@@ -1194,35 +1127,6 @@ void transferComplete(){
 
 
 }
-
-
-//void zc_found_routine(){
-//	 TIM3->CNT = 0;
-//
-//	if (thiszctime < lastzctime){
-//		lastzctime = lastzctime - 65535;
-//	}
-//
-//	if (thiszctime > lastzctime){
-////		if (((thiszctime - lastzctime) > (commutation_interval * 2)) || ((thiszctime - lastzctime < commutation_interval/2))){
-////		//	commutation_interval = (commutation_interval * 3 + (thiszctime - lastzctime))/4;
-////			commutation_interval = (commutation_interval + (thiszctime - lastzctime))/2;
-////		}else{
-//			commutation_interval = (thiszctime - lastzctime);     // TEST!   divide by two when tracking up down time independant
-//	//	}
-//		advance = commutation_interval / advancedivisor;
-//		waitTime = commutation_interval /2 - advance;
-//	}
-//	if (sensorless){
-//		while (TIM3->CNT - thiszctime < waitTime){
-//		}
-//		commutate();
-//		while (TIM3->CNT - thiszctime < waitTime + blanktime){
-//		}
-//	}
-//
-//	lastzctime = thiszctime;
-//}
 
 /* USER CODE END PFP */
 
@@ -1466,13 +1370,17 @@ int main(void)
 					if (forward == dir_reversed) {
 						forward = 1 - dir_reversed;
 						bemf_counts = 0;
+					//	startcount++;
 					}
 					adjusted_input = (newinput - 1100) * 2 + 100;
 				}
 				if (newinput <= 1047 && newinput > 0) {
+				//	startcount++;
+
 					if (forward == (1 - dir_reversed)) {
 						bemf_counts = 0;
 						forward = dir_reversed;
+
 					}
 					adjusted_input = (newinput - 90) * 2;
 				}
@@ -1489,10 +1397,10 @@ int main(void)
 				adjusted_input = 2000;
 			}
 
-			if (adjusted_input - input > 2) {
-				input = input + 1;
-			} else if (input - adjusted_input > 2) {
-				input = input - 1;
+			if (adjusted_input - input > 25) {
+				input = input + 10;
+			} else if (input - adjusted_input > 25) {
+				input = input - 10;
 			} else {
 				input = adjusted_input;
 			}
@@ -1509,7 +1417,7 @@ int main(void)
 
 
 
-		advancedivisor = map((commutation_interval), 200, 2000, 2, 20);
+		advancedivisor = map((commutation_interval), 200, 10000, 2, 20);
 		if (inputSet == 0) {
 			HAL_Delay(10);
 			detectInput();
@@ -1584,7 +1492,7 @@ int main(void)
 		}
 
 		if (input <= 47) {
-			error = 1;
+	//		error = 1;
 
 			//	sensorless = 0;
 			forcedcomcount = 0;
@@ -1618,15 +1526,15 @@ int main(void)
 //		if (bemf_counts < 100) {
 		if (bemf_counts < 100 || commutation_interval > 15000) {
 			filter_delay = 15;
-			filter_level = 10;
+			filter_level = 12;
 		} else {
 			filter_level = 3;
-			filter_delay = 3;
+			filter_delay = 8;
 		}
-		if (commutation_interval < 200 && duty_cycle > 500) {
+		if (commutation_interval > 400 && commutation_interval < 1000) {
 
-			filter_delay = 1;
-			filter_level = 0;
+			filter_delay = 5;
+			filter_level = 2;
 		}
 
 		if (started == 1) {
