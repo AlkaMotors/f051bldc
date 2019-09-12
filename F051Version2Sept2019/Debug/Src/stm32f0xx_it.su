@@ -1,0 +1,9 @@
+stm32f0xx_it.c:56:6:NMI_Handler	0	static
+stm32f0xx_it.c:69:6:HardFault_Handler	0	static
+stm32f0xx_it.c:85:6:SVC_Handler	0	static
+stm32f0xx_it.c:98:6:PendSV_Handler	0	static
+stm32f0xx_it.c:111:6:SysTick_Handler	8	static
+stm32f0xx_it.c:133:6:DMA1_Channel1_IRQHandler	8	static
+stm32f0xx_it.c:147:6:DMA1_Channel4_5_IRQHandler	8	static
+stm32f0xx_it.c:162:6:ADC1_COMP_IRQHandler	8	static
+stm32f0xx_it.c:177:6:TIM16_IRQHandler	8	static
