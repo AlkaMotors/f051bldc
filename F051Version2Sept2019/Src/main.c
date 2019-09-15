@@ -62,8 +62,8 @@ DMA_HandleTypeDef hdma_tim15_ch1_up_trig_com;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-#define MP6531
-//#define FD6288
+//#define MP6531
+#define FD6288
 
 uint16_t VirtAddVarTab[NB_OF_VAR] = {0x5555, 0x6666, 0x7777};
 uint16_t VarDataTab[NB_OF_VAR] = {0, 0, 0};
@@ -79,7 +79,7 @@ enum userVars{
 	EEbidirection = 2,
 //	EEbrake_on_stop = 3
 };
-char vehicle_mode = 1;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
+char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
 int dead_time = 60;           // change to 60 for qfn
 
 int dir_reversed = 0;   // global direction reversed set in eeprom
@@ -666,8 +666,13 @@ void forcedCommutation(){
 void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 
 
-	thiszctime = TIM3->CNT;
+if ((TIM3->CNT < commutation_interval >> 1)&& bemf_counts > 10 ){
+	return;
+}
 
+//	while(TIM3->CNT - thiszctime  < 10){
+//
+//	}
 		if (rising){
 		//	advancedivisor = advancedivisorup;
 			for (int i = 0; i < filter_level; i++){
@@ -691,7 +696,8 @@ void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 			}
 
 		}
-
+		thiszctime = TIM3->CNT;
+		compit +=1;
 	TIM3->CNT = 0;
 	zctimeout = 0;
 	//	HAL_COMP_Stop_IT(&hcomp1);
@@ -704,15 +710,17 @@ void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 
 
 	}
-	compit = 0;
 
+	TIM1->CNT = duty_cycle;
 	commutate();
 
-	commutation_interval = ((4 *commutation_interval) + thiszctime) / 5;
-			degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
+	commutation_interval = (( commutation_interval) + thiszctime) / 2;
+		degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
 			advance = degree_time * advance_multiplier;                     //  * 16 would be about 30 degrees
-			waitTime = (commutation_interval >> 1)  - advance;
-			blanktime = commutation_interval >>2 ;                               // divided by 4
+
+//	advance = commutation_interval>>2 ;
+	waitTime = (commutation_interval >> 1) - advance;
+			blanktime = commutation_interval >>4 ;                               // divided by 4
 			if(bemf_counts > 200){
 			blanktime = commutation_interval >>3 ;                              // by 8
 			}
@@ -720,175 +728,21 @@ void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
 			while (TIM3->CNT < waitTime + blanktime){
 
 			}
+
+			if (compit > 10){
+				EXTI->IMR &= (0 << 21);
+				EXTI->PR &=(0 << 21);
+		//		input = 0;
+			//	error = 1;
+				return;
+			}
+
 			EXTI->IMR |= (1 << 21);
 
 
-	if (compit > 100){
-		EXTI->IMR &= (0 << 21);
-		EXTI->PR &=(0 << 21);
-	//	error = 1;
-		return;
-	}
-	compit +=1;
-}
-//void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
-//	/* Turn On LED3 */
-////	if( commutation_interval < 1000 && duty_cycle > 100){
-////
-////
-////		thiszctime = TIM3->CNT;
-//////		GPIOA->BSRR = GPIO_PIN_15;
-////		if (rising){
-////			if (HAL_COMP_GetOutputLevel(&hcomp1) == rising){
-////						return;
-////				}
-////		}else{
-////			if (HAL_COMP_GetOutputLevel(&hcomp1) == rising){
-////						return;
-////				}
-////		}
-//////		while (TIM3->CNT - thiszctime < filter_delay){
-//////
-//////		}
-////
-////		TIM3->CNT = 0;
-////		zctimeout = 0;
-////	//	HAL_COMP_Stop_IT(&hcomp1);
-////		EXTI->IMR &= (0 << 21);
-////		EXTI->PR &=(0 << 21);
-////		              //  mask line 20 interrupt
-////
-////
-//////					while (TIM3->CNT  < waitTime){
-//////								}
-////					//            TIM1->CNT = duty_cycle;
-////                                forcedcount = 0;
-////								compit = 0;
-////
-////								commutate();
-//////								while (TIM3->CNT  < waitTime + blanktime){
-//////								}
-////
-////						        commutation_interval = ((4 *commutation_interval) + thiszctime) / 5;     // TEST!   divide by two when tracking up down time independant
-////								bad_commutation = 0;
-////
-////								//			}
-////									//		advance = commutation_interval / advancedivisor;
-////									//		waitTime = commutation_interval /2  - advance;
-////									//		blanktime = commutation_interval / 10;
-////						//		if (HAL_COMP_Start_IT(&hcomp1) != HAL_OK) {
-////									/* Initialization Error */
-////						//			Error_Handler();
-////							//	}
-////											EXTI->IMR |= (1 << 21);
-////
-////								return;
-////
-////	}else{
-//
-//		timestamp = TIM3->CNT;
-//	//	GPIOA->BSRR = GPIO_PIN_15;
-//
-//	if (compit > 200){
-//		HAL_COMP_Stop_IT(&hcomp1);
-//	//	error = 1;
-//		return;
-//	}
-//	compit +=1;
-//	while (TIM3->CNT - timestamp < filter_delay){
-//
-//	}
-//
-//	if (rising){
-//	//	advancedivisor = advancedivisorup;
-//		for (int i = 0; i < filter_level; i++){
-//		if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_HIGH){
-//	//		GPIOA->BRR = GPIO_PIN_15;
-//
-//
-//			return;
-//		}
-//		}
-//
-//
-//	}else{
-//	//	advancedivisor = advancedivisordown;
-//		for (int i = 0; i < filter_level; i++){
-//		if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_LOW){
-//	//		GPIOA->BRR = GPIO_PIN_15;
-//
-//			return;
-//		}
-//		}
-//
-//	}
-//	thiszctime = timestamp;
-//	TIM3->CNT = TIM3->CNT - timestamp;
-//	//EXTI->IMR &= (0 << 20);
-//	EXTI->IMR &= (0 << 21);
-//	//HAL_COMP_Stop_IT(&hcomp1);
-//
-//	zctimeout = 0;
-//	if (commutation_interval > thiszctime){
-//		commutation_interval = ((4 *commutation_interval) + thiszctime) / 5;    // TEST!   divide by two when tracking up down time independant
-//		bad_commutation = 0;
-//               advance = commutation_interval / advancedivisor;
-//				waitTime = (commutation_interval /2   - advance) + ((commutation_interval - thiszctime)/2);
-//				blanktime = commutation_interval / 4;
-//	}else{
-//
-//		commutation_interval = ((4 *commutation_interval) + thiszctime) / 5;    // TEST!   divide by two when tracking up down time independant
-//					bad_commutation = 0;
-//				advance = commutation_interval / advancedivisor;
-//				waitTime = (commutation_interval /2   - advance) - ((thiszctime - commutation_interval)/2)  ;
-//
-//				blanktime = commutation_interval / 4;
-//	}
-////	waitTime = (commutation_interval /2   - advance);
-//	if (waitTime < 0){
-//		waitTime = 0;
-//	}
-////	deviation = getAbsDif(commutation_interval, thiszctime);
-//
-//
-//		//	GPIOA->BRR = GPIO_PIN_15;
-//
-//		if(tempbrake){
-//				HAL_COMP_Stop_IT(&hcomp1);
-//				return;
-//		}
-//		if (sensorless){
-//			while (TIM3->CNT  < waitTime){
-//				GPIOA->BSRR = GPIO_PIN_15;
-//
-//			}
-//			TIM1->CNT = duty_cycle;
-//			GPIOA->BRR = GPIO_PIN_15;
-//			forcedcount = 0;
-//			compit = 0;
-//			commutate();
-//			while (TIM3->CNT  < waitTime + blanktime){
-//			}
-//		}
-//
-//		lastzctime = thiszctime;
-//		if (bemf_counts < 200){
-//        bemf_counts++;
-//		}
-//
-//
-////	}
-////	GPIOA->BSRR = GPIO_PIN_15;
-////	if (HAL_COMP_Start_IT(&hcomp1) != HAL_OK) {
-////		/* Initialization Error */
-////		Error_Handler();
-////	}
-////	EXTI->IMR |= (1 << 20);
-//	EXTI->IMR |= (1 << 21);
-//
-////	GPIOA->BRR = GPIO_PIN_15;
-//}
 
+
+}
 
 
 
@@ -1503,11 +1357,13 @@ int main(void)
 			}
 
 			if (adjusted_input - input > 5) {
-				input = input + 2;
+				input = input + 5;
+			//	advance_multiplier = 12;
 			} else if (input - adjusted_input > 5) {
-				input = input - 2;
+				input = input - 5;
 			} else {
 				input = adjusted_input;
+			//	advance_multiplier = map((commutation_interval), 150, 300, 8, 8);
 			}
 
 		}
@@ -1530,7 +1386,7 @@ int main(void)
 //			zctimeout = zc_timeout_threshold;
 //		}
 
-		advance_multiplier = map((commutation_interval), 150, 300, 12, 12);
+		advance_multiplier = map((commutation_interval), 150, 3000, 14, 6);
 		if (inputSet == 0) {
 			HAL_Delay(10);
 			detectInput();
@@ -1557,12 +1413,18 @@ int main(void)
 
 			duty_cycle = input  - 20;
 
-			if (bemf_counts < 50) {
+			if (bemf_counts < 25) {
 				if (duty_cycle < 150) {
 					duty_cycle = 150;
 				}
 				if (duty_cycle > 350) {
 					duty_cycle = 350;
+				}
+			}
+
+			if (bemf_counts < 199 ){
+				if (duty_cycle > 500){
+					duty_cycle = 500;
 				}
 			}
 
@@ -1641,12 +1503,15 @@ int main(void)
 		}
 //		if (bemf_counts < 100) {
 
-		if (bemf_counts < 100 || commutation_interval > 2000 || duty_cycle < 250) {
+		if (bemf_counts < 50 || commutation_interval > 2000 || duty_cycle < 200) {
 		//	filter_delay = 5;
 			filter_level = 10;
 		} else {
-			filter_level = 6;
+			filter_level = 4;
 	//		filter_delay = 5;
+		}
+		if (duty_cycle > 600){
+			filter_level = 3;
 		}
 //		if(bemf_counts < 25){
 //			filter_level = 20;
@@ -1852,7 +1717,7 @@ static void MX_IWDG_Init(void)
 	hiwdg.Instance = IWDG;
 	hiwdg.Init.Prescaler = IWDG_PRESCALER_16;
 	hiwdg.Init.Window = IWDG_WINDOW_DISABLE;
-	hiwdg.Init.Reload = 2000;
+	hiwdg.Init.Reload = 1000;
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
 	{
 		_Error_Handler(__FILE__, __LINE__);
