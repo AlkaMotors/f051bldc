@@ -1368,9 +1368,9 @@ int main(void)
 
 		}
 
-		if ( commutation_interval < 120 ){        // desync
-		input = 0;
-		}
+//		if ( commutation_interval < 120 ){        // desync
+//		input = 0;
+//		}
 
 
 //		if (bemf_counts > 100){                      // NEVER TURN THIS ON!!! for musement only
@@ -1422,7 +1422,7 @@ int main(void)
 				}
 			}
 
-			if (bemf_counts < 199 ){
+			if (bemf_counts < 50 ){
 				if (duty_cycle > 500){
 					duty_cycle = 500;
 				}
