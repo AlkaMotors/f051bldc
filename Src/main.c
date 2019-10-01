@@ -78,7 +78,7 @@ enum userVars{
 	EEbidirection = 2,
 //	EEbrake_on_stop = 3
 };
-char vehicle_mode = 1;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
+char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop
 int dead_time = 80;           // change to 60 for qfn
 
 int dir_reversed = 0;   // global direction reversed set in eeprom

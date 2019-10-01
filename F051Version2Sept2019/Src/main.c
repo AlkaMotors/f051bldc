@@ -79,7 +79,8 @@ enum userVars{
 	EEbidirection = 2,
 //	EEbrake_on_stop = 3
 };
-char vehicle_mode = 5;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = brushed mode !!!!
+char brushed_mode = 1;
+char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = brushed mode !!!!
 int dead_time = 60;           // change to 60 for qfn
 
 int dir_reversed = 0;   // global direction reversed set in eeprom
@@ -198,6 +199,8 @@ char oneshot42 = 0;
 char oneshot125 = 0;
 char servoPwm = 0;
 
+
+char brushed_direction_set = 0;
 
 char inputSet = 0;
 
@@ -655,7 +658,7 @@ void startMotor() {
 	commutate();
 //	HAL_Delay(5);
 	//commutate();
-	commutation_interval = 15000;
+	commutation_interval = 20000;
 	TIM3->CNT = 0;
 //	TIM2->CNT = 0;
 //	TIM2->ARR = commutation_interval * 2;
@@ -697,7 +700,9 @@ if ((TIM3->CNT < commutation_interval >> 1)&& bemf_counts > 3 ){
 //	EXTI->IMR |= (1 << 21);
 	return;
 }
+while (TIM3->CNT - thiszctime < filter_delay){
 
+}
 compit +=1;
 if (compit > 100){
 	EXTI->IMR &= ~(1 << 21);
@@ -741,6 +746,15 @@ if (compit > 100){
 	//	HAL_COMP_Stop_IT(&hcomp1);
 	EXTI->IMR &= ~(1 << 21);
 	EXTI->PR &=~(1 << 21);
+
+	commutation_interval = ((2*commutation_interval) + thiszctime) / 3;
+		degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
+			advance = degree_time * advance_multiplier;                     //  * 16 would be about 30 degrees
+
+//	advance = commutation_interval>>2 ;
+	waitTime = (commutation_interval >> 1) - advance;
+
+
 	if (waitTime < 0){
 			waitTime = 0;
 		}
@@ -752,16 +766,8 @@ if (compit > 100){
 //	TIM1->CNT = duty_cycle;
 	commutate();
 
-	commutation_interval = ((commutation_interval) + thiszctime) / 2;
-		degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
-			advance = degree_time * advance_multiplier;                     //  * 16 would be about 30 degrees
 
-//	advance = commutation_interval>>2 ;
-	waitTime = (commutation_interval >> 1) - advance;
-			blanktime = commutation_interval >>4 ;                               // divided by 4
-			if(bemf_counts > 200){
-			blanktime = commutation_interval >>3 ;                              // by 8
-			}
+			blanktime = commutation_interval >>3 ;                               // divided by 8
 			bemf_counts++;
 			while (TIM3->CNT < waitTime + blanktime){
 
@@ -786,7 +792,7 @@ void playStartupTune(){
 	TIM1->CCR1 = 5;
 	TIM1->CCR2 = 5;
 	TIM1->CCR3 = 5;
-	comStep(2);
+	comStep(3);
 	HAL_Delay(100);
 	TIM1->PSC = 50;
 	HAL_Delay(100);
@@ -801,7 +807,7 @@ void playInputTune(){
 	TIM1->CCR1 = 5;
 	TIM1->CCR2 = 5;
 	TIM1->CCR3 = 5;
-	comStep(2);
+	comStep(6);
 	HAL_Delay(100);
 	TIM1->PSC = 50;
 	HAL_Delay(100);
@@ -1320,6 +1326,7 @@ int main(void)
 					if (forward == dir_reversed) {
 						adjusted_input = 0;
 						prop_brake_active = 1;
+						brushed_direction_set = 0;
 						forward = 1 - dir_reversed;
 						//	HAL_Delay(1);
 					}
@@ -1331,16 +1338,16 @@ int main(void)
 						//	}
 					}
 				}
-				if (newinput < 800) {
+				if (newinput < 760) {
 					if (forward == (1 - dir_reversed)) {
 						prop_brake_active = 1;
 						adjusted_input = 0;
 						forward = dir_reversed;
-						//	HAL_Delay(1);
+						brushed_direction_set = 0;
 
 					}
 					if (prop_brake_active == 0) {
-						adjusted_input = ((800 - newinput) * 3) + 100;
+						adjusted_input = ((760 - newinput) * 3) + 100;
 
 					}
 					//	tempbrake = 0;
@@ -1355,7 +1362,7 @@ int main(void)
 			//		bemf_counts = 0;
 				}
 
-				if (newinput > 800 && newinput < 1100) {
+				if (newinput >= 760 && newinput < 1100) {
 					adjusted_input = 0;
 					prop_brake_active = 0;
 				}
@@ -1366,7 +1373,7 @@ int main(void)
 					if (forward == dir_reversed) {
 						forward = 1 - dir_reversed;
 						bemf_counts = 0;
-					//	startcount++;
+						brushed_direction_set = 0;
 					}
 					adjusted_input = (newinput - 1100) * 2 + 100;
 				}
@@ -1376,6 +1383,7 @@ int main(void)
 					if (forward == (1 - dir_reversed)) {
 						bemf_counts = 0;
 						forward = dir_reversed;
+						brushed_direction_set = 0;
 
 					}
 					adjusted_input = (newinput - 90) * 2;
@@ -1393,23 +1401,33 @@ int main(void)
 				adjusted_input = 2000;
 			}
 
-			if ((adjusted_input - input > 5 && bemf_counts < 50)) {
-				input = input + 1;
-			//	advance_multiplier = 12;
-			} else if ((input - adjusted_input > 5) && ( bemf_counts < 50)) {
-				input = input - 1;
-			} else {
+//			if ((adjusted_input - input > 5 && bemf_counts < 50)) {
+//				input = input + 1;
+//			//	advance_multiplier = 12;
+//			} else if ((input - adjusted_input > 5) && ( bemf_counts < 50)) {
+//				input = input - 1;
+//			} else {
 				input = adjusted_input;
 			//	advance_multiplier = map((commutation_interval), 150, 300, 8, 8);
-			}
+	//		}
 
 		}
 
 //		if ( commutation_interval < 120 ){        // desync
 //		input = 0;
 //		}
+if(brushed_mode){
+bemf_counts = 200;
 
-
+if(!brushed_direction_set && !prop_brake_active){
+	if(forward){
+		comStep(6);
+	}else{
+		comStep(3);
+	}
+	brushed_direction_set = 1;
+}
+}
 //		if (bemf_counts > 100){                      // NEVER TURN THIS ON!!! for musement only
 //bemf_counts = 0;
 //		input=0;
@@ -1448,7 +1466,14 @@ int main(void)
 			prop_brake_active = 0;
 			started = 1;
 
-			duty_cycle = input  - 20;
+
+			if((input - 20) > duty_cycle){
+				duty_cycle +=2;
+			}
+			if((input - 20) < duty_cycle){
+				duty_cycle -=2;
+			}
+		//	duty_cycle = input  - 20;
 
 			if (bemf_counts < 20) {
 				if (duty_cycle < 200) {
@@ -1459,11 +1484,11 @@ int main(void)
 				}
 			}
 
-			if (bemf_counts < 50 ){
-				if (duty_cycle > 600){
-					duty_cycle = 600;
-				}
-			}
+//			if (bemf_counts < 50 ){
+//				if (duty_cycle > 600){
+//					duty_cycle = 600;
+//				}
+//			}
 
 			if (running) {
 				if (duty_cycle > 1998) {                             // safety!!!
@@ -1504,7 +1529,10 @@ int main(void)
 		}
 
 		if (input <= 47) {
-	//		error = 1;
+	        if((brushed_mode) && (brushed_direction_set)){
+
+	        	brushed_direction_set = 0;
+	        }
 			if (brake == 1){
 			EXTI->IMR &= ~(1 << 21);
 			}
@@ -1544,7 +1572,7 @@ int main(void)
 
 		if (vehicle_mode == 1){
 		if (bemf_counts < 40 || commutation_interval > 2000 || duty_cycle < 200) {
-		//	filter_delay = 5;
+
 			filter_level = 15;
 		} else {
 			filter_level = 5;
@@ -1563,9 +1591,9 @@ int main(void)
 		}
 
 		if (vehicle_mode == 2 || vehicle_mode == 3) {    // crawler much fewer poles, much more filtering time needed
-			if (bemf_counts < 20 || commutation_interval > 8000 || duty_cycle < 200) {
-
-				filter_level = map((bemf_counts), 0, 20, 25,15);
+			if (bemf_counts < 50 || commutation_interval > 8000 || duty_cycle < 200) {
+				filter_delay = 15;
+				filter_level = 10;
 			} else {
 				filter_level = 8;
 
@@ -1583,52 +1611,43 @@ int main(void)
 
 		if (started == 1) {
 			if (running == 0) {
-				//		allOff();
-				upthreshold = 2;
-				threshold = 2;
+				if(brushed_mode){
+					running = 1;
+				}else{
+
 				zctimeout = 0;
 				startMotor(); // safety on for input testing   ************************************************
+				}
 			}
 		}
-
+if(!brushed_mode){
 		if (duty_cycle < 300 && bemf_counts > 10) {
-			zc_timeout_threshold = 2000;
+			zc_timeout_threshold = 600;
 		} else {
-			zc_timeout_threshold = 1000;
+			zc_timeout_threshold = 500;
 		}
-
-
-
-		if (TIM3->CNT > 60000 && duty_cycle < 1000){
-			running = 0;
-			started = 0;
-			EXTI->IMR &= ~(1 << 21);
-			EXTI->PR &=~(1 << 21);
-			//input = 0;
-
-		}
-
-
-//		zctimeout++;
-//		if (zctimeout > zc_timeout_threshold) {
-//			bemf_counts = 0;
-//			//		prop_brake_active = 0;
-//			bad_commutation = 0;
-//			sensorless = 0;
-//			EXTI->IMR &= (0 << 21);
-//		//	HAL_COMP_Stop_IT(&hcomp1);
-//			//			if(tempbrake){
-//			//
-//			//			}else{
-//			//			allOff();
-//			//			}
-//			count++;
+//		if (TIM3->CNT > 60000 && duty_cycle < 1000){
 //			running = 0;
-//			//		commutation_interval = 0;
-//		//	zctimeout = zc_timeout_threshold + 1;
-//			duty_cycle = 0;
+//			started = 0;
+//			EXTI->IMR &= ~(1 << 21);
+//			EXTI->PR &=~(1 << 21);
+//			//input = 0;
+//
 //		}
+	zctimeout++;
+		if (zctimeout > zc_timeout_threshold) {
+			bemf_counts = 0;
+			//		prop_brake_active = 0;
+			bad_commutation = 0;
+			sensorless = 0;
+			EXTI->IMR &= (0 << 21);
+		//	HAL_COMP_Stop_IT(&hcomp1);
+			count++;
+			running = 0;
+			duty_cycle = 0;
+		}
 
+}
 
 
 //		if ((bemf_counts > 15
