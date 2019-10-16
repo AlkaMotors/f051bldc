@@ -79,8 +79,13 @@ enum userVars{
 	EEbidirection = 2,
 //	EEbrake_on_stop = 3
 };
-char brushed_mode = 1;
-char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = brushed mode !!!!
+char brushed_mode = 0;
+char vehicle_mode = 5;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = no eeprom !!!!
+
+char bi_polar = 0;
+char polling_mode = 0;  // for better low speed accuracy
+
+
 int dead_time = 60;           // change to 60 for qfn
 
 int dir_reversed = 0;   // global direction reversed set in eeprom
@@ -94,9 +99,9 @@ int commandcount = 0;
 char bad_commutation = 0;
 
 int bi_direction = 1;
-char slow_decay = 1;                      // for complementary pwm , 0 for diode freewheeling
+char comp_pwm = 1;                      // for complementary pwm , 0 for diode freewheeling
 int brake = 1;                          // apply full motor brake on stop
-int start_power = 150;
+int start_power = 200;
 char prop_brake = 0;
 int prop_brake_strength = 300;
 int IC_buffer_size = 64;
@@ -119,6 +124,9 @@ char advancedivisor = 12;                    // increase divisor to decrease adv
 char advancedivisorup = 3;
 char advancedivisordown = 3;
 int advance_multiplier = 10;
+
+int dither_count;
+int dither_amount = 10;
 
 
 int thiszctime = 0;
@@ -143,7 +151,7 @@ int filter_level_down = 8;
 int forcedcount = 0;
 int control_loop_count;
 int zctimeout = 0;
-int zc_timeout_threshold = 2000;   // depends on speed of main loop
+int zc_timeout_threshold = 2400;   // depends on speed of main loop
 
 int signaltimeout = 0;
 int signal_timeout_threshold = 20000;
@@ -152,9 +160,7 @@ int temp_step;
 int ROC = 1;
 int tocheck = 0;
 
-int zcfound = 1;
-int threshold = 1;
-int upthreshold = 1;
+
 int tim2_start_arr = 9000;
 int startupcountdown = 0;
 
@@ -191,6 +197,14 @@ int tempraw = 0;
 uint32_t ADC1ConvertedValues[2] = {0,0};
 int timestamp;
 
+int compcount = 0;
+int upcompcount = 0;
+int falsecount = 0;
+int falsethreshold = 2;
+int zcfound = 1;
+int threshold = 6;
+int upthreshold = 6;
+int forced_com_done = 0;
 
 char dshot = 0;
 char proshot = 0;
@@ -282,7 +296,7 @@ void phaseBPWM() {
 #endif
 
 
-		if(!slow_decay  || prop_brake_active){            // for future
+		if(!comp_pwm  || prop_brake_active){            // for future
 		LL_GPIO_SetPinMode(GPIOB, GPIO_PIN_0, LL_GPIO_MODE_OUTPUT);
 		GPIOB->BRR = GPIO_PIN_0;
 		}else{
@@ -332,7 +346,7 @@ void phaseBPWM() {                                // phase c qfn , phase b qfp
 void phaseCPWM() {
 #endif
 
-		if (!slow_decay || prop_brake_active){
+		if (!comp_pwm || prop_brake_active){
 			LL_GPIO_SetPinMode(GPIOA, GPIO_PIN_7, LL_GPIO_MODE_OUTPUT);
 			GPIOA->BRR = GPIO_PIN_7;
 		}else{
@@ -383,7 +397,7 @@ void phaseCPWM() {                    // phaseA qfn , phase C qfp
 void phaseAPWM() {
 #endif
 
-		if (!slow_decay || prop_brake_active){
+		if (!comp_pwm || prop_brake_active){
 			LL_GPIO_SetPinMode(GPIOB, GPIO_PIN_1, LL_GPIO_MODE_OUTPUT);
 			GPIOB->BRR = GPIO_PIN_1;
 			}else{
@@ -547,7 +561,32 @@ void changeCompInput() {
 //	}
 ////stop_time = TIM2->CNT;
 }
+void pollingChangeCompInput() {
 
+	HAL_COMP_Stop(&hcomp1);
+
+	if (step == 1 || step == 4) {   // c floating
+		hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_IO1;
+	}
+
+	if (step == 2 || step == 5) {     // a floating
+		hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC1;
+	}
+
+	if (step == 3 || step == 6) {      // b floating
+		hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC2;
+	}
+
+	if (HAL_COMP_Init(&hcomp1) != HAL_OK) {
+		_Error_Handler(__FILE__, __LINE__);
+	}
+
+	if (HAL_COMP_Start(&hcomp1) != HAL_OK) {
+		/* Initialization Error */
+		Error_Handler();
+	}
+
+}
 
 void commutate() {
 //	TIM2->CNT = 0;
@@ -580,8 +619,24 @@ void commutate() {
 	if (input > 47){
 comStep(step);
 	}
-	changeCompInput();
-//	zcfound = 0;
+
+	if((bemf_counts > 50 && duty_cycle > 180)){
+		polling_mode = 0;
+
+	}else{
+		polling_mode = 1;
+	}
+	if (duty_cycle < 180 || commutation_interval > 10000){
+		polling_mode = 1;
+	}
+
+	if(!polling_mode){
+		changeCompInput();
+		EXTI->IMR |= (1 << 21);
+	}else{
+		pollingChangeCompInput();
+	}
+	zcfound = 0;
 //	falseAlarm = 0;
 //	compCount = 0;
 //	upcompCount = 0;
@@ -613,38 +668,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			 }
 
 		}
-//			if (htim->Instance==TIM1)
-//			{
-//				if (rising){
-//				//	advancedivisor = advancedivisorup;
-//					if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_LOW){
-//				//		GPIOA->BRR = GPIO_PIN_15;
-//						zcfound++;
-//					//	EXTI->IMR |= (1 << 21);
-//						return;
-//					//	EXTI->IMR |= (1 << 21);
-//					}else zcfound = 0;
-//
-//
-//
-//				}else{
-//				//	advancedivisor = advancedivisordown;
-//
-//					if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_HIGH){
-//				//		GPIOA->BRR = GPIO_PIN_15;
-//						zcfound++;
-//						//EXTI->IMR |= (1 << 21);
-//						return;
-//					}else zcfound = 0;
-//				}
-//			}
+
 }
 
 void startMotor() {
 
  startcount++;
 
-    char decaystate = slow_decay;
+    char decaystate = comp_pwm;
     sensorless = 0;
 	if (running == 0){
 		EXTI->IMR &= ~(1 << 21);
@@ -652,14 +683,14 @@ void startMotor() {
 
 
 	//	HAL_COMP_Stop_IT(&hcomp1);
-		slow_decay = 1;
+		comp_pwm = 1;
 
 
 	commutate();
 //	HAL_Delay(5);
 	//commutate();
 	commutation_interval = 20000;
-	TIM3->CNT = 0;
+	TIM2->CNT = 0;
 //	TIM2->CNT = 0;
 //	TIM2->ARR = commutation_interval * 2;
 	running = 1;
@@ -667,10 +698,16 @@ void startMotor() {
 			/* Initialization Error */
 //			Error_Handler();
 //		}
+	if(!polling_mode){
 	EXTI->IMR |= (1 << 21);
 	}
-
-	slow_decay = decaystate;    // return to normal
+	}else{
+		if (HAL_COMP_Start(&hcomp1) != HAL_OK) {
+			/* Initialization Error */
+			Error_Handler();
+		}
+	}
+	comp_pwm = decaystate;    // return to normal
 	sensorless = 1;
 	startupcountdown =0;
 	bemf_counts = 0;
@@ -679,9 +716,9 @@ void startMotor() {
 
 void forcedCommutation(){
 	HAL_COMP_Stop_IT(&hcomp1);
-    TIM3->CNT = commutation_interval / 2;
+    TIM2->CNT = commutation_interval / 2;
     commutate();
-    while (TIM3->CNT - commutation_interval / 2  <  blanktime){}
+    while (TIM2->CNT - commutation_interval / 2  <  blanktime){}
 	if (HAL_COMP_Start_IT(&hcomp1) != HAL_OK) {
 		/* Initialization Error */
 		Error_Handler();
@@ -692,15 +729,15 @@ void forcedCommutation(){
 
 
 void HAL_COMP_TriggerCallback(COMP_HandleTypeDef *hcomp) {
-//	thiszctime = TIM3->CNT;
+//	thiszctime = TIM2->CNT;
 //	EXTI->IMR &= (0 << 21);
 //		EXTI->PR &=(0 << 21);
-if ((TIM3->CNT < commutation_interval >> 1)&& bemf_counts > 3 ){
+if ((TIM2->CNT < commutation_interval >> 1)&& bemf_counts > 3 ){
 
 //	EXTI->IMR |= (1 << 21);
 	return;
 }
-while (TIM3->CNT - thiszctime < filter_delay){
+while (TIM2->CNT - thiszctime < filter_delay){
 
 }
 compit +=1;
@@ -711,7 +748,7 @@ if (compit > 100){
 	error = 1;
 	return;
 }
-//	while(TIM3->CNT - thiszctime  < filter_delay){
+//	while(TIM2->CNT - thiszctime  < filter_delay){
 //
 //	}
 		if (rising){
@@ -738,51 +775,127 @@ if (compit > 100){
 			}
 
 		}
-		thiszctime = TIM3->CNT;
+		thiszctime = TIM2->CNT;
 
 
-	TIM3->CNT = 0;
+	TIM2->CNT = 0;
 	zctimeout = 0;
 	//	HAL_COMP_Stop_IT(&hcomp1);
+	while (TIM2->CNT  < waitTime){
+	}
+
 	EXTI->IMR &= ~(1 << 21);
 	EXTI->PR &=~(1 << 21);
-
+//	TIM1->CNT = duty_cycle;
+	commutate();
 	commutation_interval = ((2*commutation_interval) + thiszctime) / 3;
 		degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
 			advance = degree_time * advance_multiplier;                     //  * 16 would be about 30 degrees
-
 //	advance = commutation_interval>>2 ;
 	waitTime = (commutation_interval >> 1) - advance;
-
-
 	if (waitTime < 0){
 			waitTime = 0;
 		}
-	while (TIM3->CNT  < waitTime){
-
-
-	}
-
-//	TIM1->CNT = duty_cycle;
-	commutate();
-
-
 			blanktime = commutation_interval >>3 ;                               // divided by 8
 			bemf_counts++;
-			while (TIM3->CNT < waitTime + blanktime){
+			while (TIM2->CNT < waitTime + blanktime){
 
 			}
-
-
-
 			EXTI->IMR |= (1 << 21);
 //				if (HAL_COMP_Start_IT(&hcomp1) != HAL_OK) {
 //						/* Initialization Error */
 //			//			Error_Handler();
 //					}
+}
+
+
+void checkForZeroCross(){
+	if(!zcfound){
+
+			//			  if (step == 2 || step == 4 || step == 6){
+			if (rising == 0){
+				if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_LOW){
+					falsecount++;
+					if (falsecount > falsethreshold){
+					compcount = 0;
+					zcfound = 0;
+					falsecount = 0;
+					}
+
+				}
+
+				if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_HIGH){
+
+					compcount++;
+				}
+					if (compcount > threshold){
+							zcfound = 1;
+							zctimeout = 0;
+							compcount = 0;
+							bemf_counts++;
+							falsecount = 0;
+							thiszctime = TIM2->CNT;
+							TIM2->CNT = 0;
+							forced_com_done = 0;
+
+						    commutation_interval = ((2*commutation_interval) + thiszctime) / 3;
+							degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
+							advance = degree_time * advance_multiplier;                     //  * 16 would be about 30 degrees
+							waitTime = (commutation_interval >> 1) - advance;
+
+							if (sensorless){
+								while (TIM2->CNT  < waitTime){
+								}
+								commutate();
+
+							}
+							zcfound = 0;
+
+						}
+			}
 
 
 
+			if (rising == 1){
+				if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_HIGH){
+					falsecount++;
+					if (falsecount > falsethreshold){
+					upcompcount = 0;
+					zcfound = 0;
+					falsecount = 0;
+					}
+
+				}
+
+				if (HAL_COMP_GetOutputLevel(&hcomp1) == COMP_OUTPUTLEVEL_LOW){
+					//		GPIOA->BSRR = GPIO_PIN_15;
+					upcompcount++;
+				}
+					if (upcompcount > upthreshold){
+							zcfound = 1;
+							zctimeout = 0;
+							upcompcount = 0;
+							falsecount = 0;
+							bemf_counts++;
+				//			GPIOA->BSRR = GPIO_PIN_15;
+								thiszctime = TIM2->CNT;
+								TIM2->CNT = 0;
+								forced_com_done = 0;
+
+							    commutation_interval = ((2*commutation_interval) + thiszctime) / 3;
+								degree_time = commutation_interval >> 5;                          // about 1.85 degrees per unit
+								advance = degree_time * advance_multiplier;
+								waitTime = (commutation_interval >> 1) - advance;
+								if (sensorless){
+									while (TIM2->CNT < waitTime){
+									}
+									commutate();
+								}
+								zcfound = 0;
+		//						lastzctime = thiszctime;
+						}
+			}
+	}
 }
 
 
@@ -1159,7 +1272,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM15_Init();
-  MX_IWDG_Init();
+
   MX_TIM16_Init();
 
   /* USER CODE BEGIN 2 */
@@ -1174,22 +1287,24 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim16);
 	HAL_TIM_Base_Start(&htim3);
 	//  HAL_Delay(500);
+	for ( int i = 0; i < vehicle_mode; i++){
 	playStartupTune();
-
-
+	HAL_Delay(100);
+	}
+	MX_IWDG_Init();
 	if (vehicle_mode == 1){                    // quad single direction
 		loadEEpromConfig();
 	}
 	if (vehicle_mode == 2){                   // crawler or thruster
 		 bi_direction = 1;
-		 slow_decay = 1;                      // for complementary pwm , 0 for diode freewheeling
+		 comp_pwm = 1;                      // for complementary pwm , 0 for diode freewheeling
 		 brake = 1;                          // apply full motor brake on stop
-		 start_power = 150;
+	//	 start_power = 150;
 
 	}
 	if (vehicle_mode == 3){                 // rc car 50 percent brake on reverse.
 		 bi_direction = 1;
-		 slow_decay = 0;                      // for complementary pwm , 0 for diode freewheeling
+		 comp_pwm = 0;                      // for complementary pwm , 0 for diode freewheeling
 		 brake = 0;                          // apply full motor brake on stop
 	//	 start_power = 150;
 		 prop_brake = 1;
@@ -1197,7 +1312,7 @@ int main(void)
 	}
 	if (vehicle_mode == 4){                 // rc car 50 percent brake on reverse.
 			 bi_direction = 1;
-			 slow_decay = 0;                      // for complementary pwm , 0 for diode freewheeling
+			 comp_pwm = 0;                      // for complementary pwm , 0 for diode freewheeling
 			 brake = 0;                          // apply full motor brake on stop
 	//		 start_power = 150;
 			 prop_brake = 1;
@@ -1244,6 +1359,14 @@ int main(void)
 	TIM1->CCR3 = 1;
 
 	TIM1->CCR4 = 800;
+
+	if (!brushed_mode && bi_polar){          // sanity check, turn off bipolar pwm if brushed mode is not selected
+		bi_polar = 0;
+	}
+	if(bi_polar){
+		comp_pwm = 1;
+	}
+
 //	changeCompInput();
 
   /* USER CODE END 2 */
@@ -1417,15 +1540,29 @@ int main(void)
 //		input = 0;
 //		}
 if(brushed_mode){
+dither_count++;
+if(dither_count > 2){
+	dither_count = 0;
+}
+if(input > 1990){               // keep slightly below 100 percent duty cycle for some drivers
+	input = 1990;
+}
 bemf_counts = 200;
 
 if(!brushed_direction_set && !prop_brake_active){
+
+if (!bi_polar){
 	if(forward){
 		comStep(6);
 	}else{
 		comStep(3);
 	}
 	brushed_direction_set = 1;
+}else{      // bipolar pwm  caution!!
+	phaseAPWM();
+	phaseCPWM();
+		brushed_direction_set = 1;
+}
 }
 }
 //		if (bemf_counts > 100){                      // NEVER TURN THIS ON!!! for musement only
@@ -1441,7 +1578,7 @@ if(!brushed_direction_set && !prop_brake_active){
 //			zctimeout = zc_timeout_threshold;
 //		}
 
-		advance_multiplier = map((commutation_interval), 150, 3000, 12, 2);
+		advance_multiplier = map((commutation_interval), 150, 3000, 16, 8);
 		if (inputSet == 0) {
 			HAL_Delay(10);
 			detectInput();
@@ -1465,43 +1602,73 @@ if(!brushed_direction_set && !prop_brake_active){
 		if ((input > 47) && (armed == 1)) {
 			prop_brake_active = 0;
 			started = 1;
+			start_power = map((input), 47, 1998, 150, 600);
 
-
-			if((input - 20) > duty_cycle){
+			if((input - 60) > duty_cycle){
 				duty_cycle +=2;
 			}
-			if((input - 20) < duty_cycle){
+			if((input - 60) < duty_cycle){
 				duty_cycle -=2;
 			}
 		//	duty_cycle = input  - 20;
 
 			if (bemf_counts < 20) {
-				if (duty_cycle < 200) {
-					duty_cycle = 200;
-				}
+//				if (duty_cycle < 150) {
+//					duty_cycle = 150;
+//				}
 				if (duty_cycle > 500) {
 					duty_cycle = 500;
 				}
 			}
 
-//			if (bemf_counts < 50 ){
-//				if (duty_cycle > 600){
-//					duty_cycle = 600;
-//				}
-//			}
+			if (bemf_counts < 5 ){
+
+					duty_cycle = start_power;
+
+			}
 
 			if (running) {
 				if (duty_cycle > 1998) {                             // safety!!!
 					duty_cycle = 1998;
 				}
-				if (duty_cycle < 60) {
-					duty_cycle = 60;
+				if (duty_cycle < 90) {
+					duty_cycle = 90;
 				}
 
-				TIM1->CCR1 = duty_cycle;// set duty cycle to 50 out of 768 to start.
+				if(bi_polar){
+                 if (dither_count == 0){
+				 if (forward){
+					TIM1->CCR2 = (TIM1->ARR /2) + (input / 2);
+					TIM1->CCR3 = (TIM1->ARR /2) - (input / 2);
+				 }else{
+					 TIM1->CCR2 = (TIM1->ARR /2) - (input / 2);
+					 TIM1->CCR3 = (TIM1->ARR /2) + (input / 2);
+				 }
+                 }
+                 if (dither_count == 1){
+                 				 if (forward){
+                 					TIM1->CCR2 = (TIM1->ARR /2) + (input / 2) + dither_amount;
+                 					TIM1->CCR3 = (TIM1->ARR /2) - (input / 2) - dither_amount;
+                 				 }else{
+                 					 TIM1->CCR2 = (TIM1->ARR /2) - (input / 2)- dither_amount;
+                 					 TIM1->CCR3 = (TIM1->ARR /2) + (input / 2) + dither_amount;
+                 				 }
+                                  }
+                 if (dither_count == 2){
+                 				 if (forward){
+                 					TIM1->CCR2 = (TIM1->ARR /2) + (input / 2)- dither_amount;
+                 					TIM1->CCR3 = (TIM1->ARR /2) - (input / 2) + dither_amount;
+                 				 }else{
+                 					 TIM1->CCR2 = (TIM1->ARR /2) - (input / 2) + dither_amount;
+                 					 TIM1->CCR3 = (TIM1->ARR /2) + (input / 2) - dither_amount;
+                 				 }
+                                  }
+				}else{
+				TIM1->CCR1 = duty_cycle;
 				TIM1->CCR2 = duty_cycle;
 				TIM1->CCR3 = duty_cycle;
 				//	TIM1->CCR4 = duty_cycle;
+				}
 			}
 
 		}
@@ -1544,7 +1711,7 @@ if(!brushed_direction_set && !prop_brake_active){
 				allOff();
 			}
 			duty_cycle = 0;
-			if (brake || tempbrake) {
+			if ((brake || tempbrake)&& (!bi_polar)) {
 				fullBrake();
 				duty_cycle = 0;
 				bemf_counts = 0;
@@ -1557,10 +1724,14 @@ if(!brushed_direction_set && !prop_brake_active){
 				proBrake();
 			}
 
+			if(bi_polar){
+				TIM1->CCR2 = (TIM1->ARR) / 2;
+				TIM1->CCR3 = (TIM1->ARR) / 2;
+			}else{
 			TIM1->CCR1 = duty_cycle;// set duty cycle to 50 out of 768 to start.
 			TIM1->CCR2 = duty_cycle;
 			TIM1->CCR3 = duty_cycle;
-
+			}
 //					if (commutation_interval > 60000){
 //						HAL_COMP_Stop_IT(&hcomp1);
 //					//	prop_brake_active = 0;
@@ -1572,40 +1743,40 @@ if(!brushed_direction_set && !prop_brake_active){
 
 		if (vehicle_mode == 1){
 		if (bemf_counts < 40 || commutation_interval > 2000 || duty_cycle < 200) {
-
-			filter_level = 15;
+			filter_delay = 15;
+			filter_level = 10;
 		} else {
 			filter_level = 5;
 
 			filter_delay = 0;
 		}
 		if (duty_cycle > 600 && bemf_counts > 75){
-			filter_level = 3;
+			filter_level = 2;
 		//	filter_delay = 0;
 		}
 
 		if (commutation_interval < 200 && bemf_counts > 100){
-			filter_level = 3;
+			filter_level = 2;
 		}
 
 		}
 
-		if (vehicle_mode == 2 || vehicle_mode == 3) {    // crawler much fewer poles, much more filtering time needed
-			if (bemf_counts < 50 || commutation_interval > 8000 || duty_cycle < 200) {
+		if (vehicle_mode == 2|| vehicle_mode == 3 ) {    // crawler much fewer poles, much more filtering time needed
+			if (bemf_counts < 25 || commutation_interval > 8000 || duty_cycle < 200) {
 				filter_delay = 15;
-				filter_level = 10;
+				filter_level = 15;
 			} else {
 				filter_level = 8;
 
 				filter_delay = 0;
 			}
 		}
-		if (vehicle_mode == 5){ // big motors low kv
+		if (vehicle_mode == 5 ){
 
 		if(bemf_counts < 15 || commutation_interval > 25000){
 			filter_level = 10;
 		}else{
-			filter_level = 5;
+			filter_level = 2;
 		}
 		}
 
@@ -1620,20 +1791,36 @@ if(!brushed_direction_set && !prop_brake_active){
 				}
 			}
 		}
-if(!brushed_mode){
-		if (duty_cycle < 300 && bemf_counts > 10) {
-			zc_timeout_threshold = 600;
-		} else {
-			zc_timeout_threshold = 500;
+
+		if (polling_mode && running == 1){
+			checkForZeroCross();
+
+//			if ((TIM2->CNT > (commutation_interval + commutation_interval / 2)) && commutation_interval > 10000 ){
+//				if(!forced_com_done){
+//					commutate();
+//					TIM2->CNT = 0;
+//					forced_com_done = 1;
+//				}
+//			}
 		}
-//		if (TIM3->CNT > 60000 && duty_cycle < 1000){
-//			running = 0;
-//			started = 0;
-//			EXTI->IMR &= ~(1 << 21);
-//			EXTI->PR &=~(1 << 21);
-//			//input = 0;
-//
+
+
+
+
+if(!brushed_mode){
+//		if (duty_cycle < 300 && bemf_counts > 10) {
+//			zc_timeout_threshold = 800;
+//		} else {
+//			zc_timeout_threshold = 700;
 //		}
+////		if (TIM3->CNT > 60000 && duty_cycle < 1000){
+////			running = 0;
+////			started = 0;
+////			EXTI->IMR &= ~(1 << 21);
+////			EXTI->PR &=~(1 << 21);
+////			//input = 0;
+////
+////		}
 	zctimeout++;
 		if (zctimeout > zc_timeout_threshold) {
 			bemf_counts = 0;
@@ -1644,7 +1831,7 @@ if(!brushed_mode){
 		//	HAL_COMP_Stop_IT(&hcomp1);
 			count++;
 			running = 0;
-			duty_cycle = 0;
+		//	duty_cycle = 0;
 		}
 
 }
@@ -1905,7 +2092,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 10;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 50000;
+  htim2.Init.Period = 126000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
