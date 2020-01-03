@@ -1,0 +1,5 @@
+stm32f0xx_hal_pwr_ex.c:124:6:HAL_PWR_ConfigPVD	0	static
+stm32f0xx_hal_pwr_ex.c:166:6:HAL_PWR_EnablePVD	0	static
+stm32f0xx_hal_pwr_ex.c:175:6:HAL_PWR_DisablePVD	0	static
+stm32f0xx_hal_pwr_ex.c:202:13:HAL_PWR_PVDCallback	0	static
+stm32f0xx_hal_pwr_ex.c:185:6:HAL_PWR_PVD_IRQHandler	16	static

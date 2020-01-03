@@ -1,0 +1,5 @@
+stm32f0xx_ll_utils.c:160:6:LL_Init1msTick	8	static
+stm32f0xx_ll_utils.c:176:6:LL_mDelay	8	static
+stm32f0xx_ll_utils.c:232:6:LL_SetSystemCoreClock	0	static
+stm32f0xx_ll_utils.c:255:13:LL_PLL_ConfigSystemClock_HSI	24	static
+stm32f0xx_ll_utils.c:380:13:LL_PLL_ConfigSystemClock_HSE	32	static

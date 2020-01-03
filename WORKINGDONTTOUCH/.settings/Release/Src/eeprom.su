@@ -1,0 +1,3 @@
+eeprom.c:69:10:EE_Init	64	static
+eeprom.c:360:10:EE_ReadVariable	12	static
+eeprom.c:419:10:EE_WriteVariable	56	static

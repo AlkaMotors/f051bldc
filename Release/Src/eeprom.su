@@ -1,6 +1,0 @@
-eeprom.c:322:10:EE_VerifyPageFullyErased	0	static
-eeprom.c:566:17:EE_VerifyPageFullWriteVariable	16	static
-eeprom.c:443:26:EE_Format	24	static
-eeprom.c:360:10:EE_ReadVariable	8	static
-eeprom.c:69:10:EE_Init	48	static
-eeprom.c:419:10:EE_WriteVariable	48	static

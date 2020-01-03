@@ -80,7 +80,7 @@ enum userVars{
 //	EEbrake_on_stop = 3
 };
 char brushed_mode = 0;
-char vehicle_mode = 5;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = no eeprom !!!!
+char vehicle_mode = 2;    // 1 = quad mode / eeprom load mode , 2 = crawler / thruster mode,  3 = rc car mode,  4 = like car mode but with auto reverse after stop  5 = no eeprom !!!!
 
 char bi_polar = 0;
 char polling_mode = 0;  // for better low speed accuracy
@@ -98,7 +98,7 @@ int forcedcomcount = 0;
 int commandcount = 0;
 char bad_commutation = 0;
 
-int bi_direction = 1;
+int bi_direction = 0;
 char comp_pwm = 1;                      // for complementary pwm , 0 for diode freewheeling
 int brake = 1;                          // apply full motor brake on stop
 int start_power = 200;
@@ -217,6 +217,61 @@ char servoPwm = 0;
 char brushed_direction_set = 0;
 
 char inputSet = 0;
+
+const int pwmSin[] = {128,130,132,134,136,139,141,143,
+145,147,150,152,154,156,158,160,
+163,165,167,169,171,173,175,177,
+179,181,183,185,187,189,191,193,
+195,197,199,201,202,204,206,208,
+209,211,213,214,216,218,219,221,
+222,224,225,227,228,229,231,232,
+233,234,236,237,238,239,240,241,
+242,243,244,245,246,247,247,248,
+249,249,250,251,251,252,252,253,
+253,253,254,254,254,255,255,255,
+255,255,255,255,255,255,255,255,
+254,254,254,253,253,253,252,252,
+251,251,250,249,249,248,247,247,
+246,245,244,243,242,241,240,239,
+238,237,236,234,233,232,231,229,
+228,227,225,224,222,221,219,218,
+216,214,213,211,209,208,206,204,
+202,201,199,197,195,193,191,189,
+187,185,183,181,179,177,175,173,
+171,169,167,165,163,160,158,156,
+154,152,150,147,145,143,141,139,
+136,134,132,130,128,125,123,121,
+119,116,114,112,110,108,105,103,
+101,99,97,95,92,90,88,86,
+84,82,80,78,76,74,72,70,
+68,66,64,62,60,58,56,54,
+53,51,49,47,46,44,42,41,
+39,37,36,34,33,31,30,28,
+27,26,24,23,22,21,19,18,
+17,16,15,14,13,12,11,10,
+9,8,8,7,6,6,5,4,
+4,3,3,2,2,2,1,1,
+1,0,0,0,0,0,0,0,
+0,0,0,0,1,1,1,2,
+2,2,3,3,4,4,5,6,
+6,7,8,8,9,10,11,12,
+13,14,15,16,17,18,19,21,
+22,23,24,26,27,28,30,31,
+33,34,36,37,39,41,42,44,
+46,47,49,51,53,54,56,58,
+60,62,64,66,68,70,72,74,
+76,78,80,82,84,86,88,90,
+92,95,97,99,101,103,105,108,
+110,112,114,116,119,121,123,125};
+
+int phase_A_position;
+int phase_B_position;
+int phase_C_position;
+int step_delay  = 100;
+//char stepper_sine = 0;
+int gate_drive_offset = 50;
+int sine_mode = 0;
+
 
 /* USER CODE END PV */
 
@@ -570,11 +625,21 @@ void pollingChangeCompInput() {
 	}
 
 	if (step == 2 || step == 5) {     // a floating
-		hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC1;
+#ifdef MP6531
+			hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC1;  /// if f051k6  step 2 , 5 is dac 1 ( swap comp input)
+#endif
+#ifdef FD6288
+	hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC2;
+#endif
 	}
 
 	if (step == 3 || step == 6) {      // b floating
-		hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC2;
+#ifdef MP6531
+			hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC2;  /// if f051k6  step 2 , 5 is dac 1 ( swap comp input)
+#endif
+#ifdef FD6288
+	hcomp1.Init.InvertingInput = COMP_INVERTINGINPUT_DAC1;
+#endif
 	}
 
 	if (HAL_COMP_Init(&hcomp1) != HAL_OK) {
@@ -1338,11 +1403,11 @@ int main(void)
 			Error_Handler();
 		}
 	//
-	if(HAL_IWDG_Init(&hiwdg) != HAL_OK)
-	{
-		/* Initialization Error */
-		Error_Handler();
-	}
+//	if(HAL_IWDG_Init(&hiwdg) != HAL_OK)
+//	{
+//		/* Initialization Error */
+//		Error_Handler();
+//	}
 
 	if(bi_direction){
 		newinput = 1001;
@@ -1354,6 +1419,8 @@ int main(void)
 	}else{
 		forward = 1;
 	}
+
+	//proBrake();
 	TIM1->CCR1 = 1;
 	TIM1->CCR2 = 1;
 	TIM1->CCR3 = 1;
@@ -1852,8 +1919,8 @@ if(!brushed_mode){
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-//			}
-//		}
+////			}
+////		}
 	}
   /* USER CODE END 3 */
 
@@ -2069,7 +2136,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 60;
+  sBreakDeadTimeConfig.DeadTime = 80;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
