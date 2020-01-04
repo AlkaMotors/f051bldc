@@ -2,7 +2,7 @@
 brushless motor control stm32f051
 January 2020 update, fresh start.
 Project has been moved to cubeIDE so entire directory can be downloaded and can be opened in that IDE.
-For other IDE's linux probably its best to open the cubeMX file and genereate peripherla code for the appropriate ide then copy main.c and _it.c 
+For other IDE's linux probably its best to open the cubeMX file and genereate peripheral setup code for the appropriate ide then copy main.c and _it.c 
 
 Currently working:
 Vehicle modes, 
