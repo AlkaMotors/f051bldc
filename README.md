@@ -6,7 +6,7 @@ For other IDE's linux probably its best to open the cubeMX file and genereate pe
 
 Currently working:
 Vehicle modes, 
-1) eeprom mode (saved settings), 
+1) eeprom mode or multirotor (saved settings), dshot commands to enable 3d mode or motor direction.
                
 2) crawler, thruster mode (reversible, full brake and no freewheeling, sinusoidal startup)
                
@@ -14,11 +14,11 @@ Vehicle modes,
                
 5) No eeprom , to test settings 
 
-Complementary pwm on/off
+Complementary pwm on/off option.
 
-Input autodetection , dshot 300, 600 or pwm
+Input autodetection , dshot 300, 600 or pwm  ( others are in firmware but disabled for now, oneshot, multishot, proshot)
 
-Variable frequency pwm output, matches motor rotation for most used range
+Variable frequency pwm output, matches motor rotation for most used range (varies on the fly from 24-48khz).
 
 Slow start sinusoidal modes, for heavy loads, crawlers
 
