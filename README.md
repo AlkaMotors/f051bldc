@@ -1,4 +1,9 @@
 # f051bldc
+
+UPDATE JAN 2021
+
+THIS PROJECT IS NO LONGER UPDATED, IT IS RECOMMENDED TO USE THE AM32 FIRMWARE INSTEAD https://github.com/AlkaMotors/AM32-MultiRotor-ESC-firmware
+
 brushless motor control stm32f051
 January 2020 update, fresh start.
 Project has been moved to cubeIDE so entire directory can be downloaded and can be opened in that IDE.
